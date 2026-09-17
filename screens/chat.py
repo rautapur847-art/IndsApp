@@ -885,127 +885,128 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
 
     # ---- WebSocket se connect karo aur live messages sunte raho ----
     async def connect_and_listen():
+            
         try:
             print("Connecting to WebSocket:", WS_SERVER_URL)
-
+    
             async with websockets.connect(
-            WS_SERVER_URL,
-            max_size=None,
-            open_timeout=30,
-            ping_interval=20,
-            ping_timeout=20,
+                WS_SERVER_URL,
+                max_size=None,
+                open_timeout=30,
+                ping_interval=20,
+                ping_timeout=20,
             ) as ws:
-
-            print("WebSocket CONNECTED")
-
-            ws_state["connection"] = ws
-
-            status_text.spans = [
-                ft.TextSpan(
-                    "online",
-                    style=ft.TextStyle(color="green")
-                )
-            ]
-            page.update()
-
-            print("Registering phone:", my_phone)
-
-            await ws.send(
-                json.dumps({
-                    "type": "register",
-                    "phone": my_phone
-                })
-            )
-
-            print("Phone registered:", my_phone)
-
-            async for raw in ws:
-                print("Received:", raw)
-
-                data = json.loads(raw)
-                mtype = data.get("type")
-                sender = data.get("from")
-
-                if mtype == "ack":
-                    item = msg_index.get(data.get("mid"))
-                    if item:
-                        item["tick"].value = "✓✓"
-                        page.update()
-                    continue
-
-                if mtype == "delete":
-                    remove_bubble(data.get("mid"))
-                    continue
-
-                if sender != str(contact_phone):
-                    continue
-
-                mid = data.get("mid") or str(uuid.uuid4())
-
-                if mtype == "message":
-                    row_control = make_bubble(
-                        mid,
-                        data["text"],
-                        False
+    
+                print("WebSocket CONNECTED")
+    
+                ws_state["connection"] = ws
+    
+                status_text.spans = [
+                    ft.TextSpan(
+                        "online",
+                        style=ft.TextStyle(color="green")
                     )
-
-                    chat_area.controls.append(row_control)
-
-                    db_id = db_save(
-                        mid,
-                        contact_id,
-                        my_id,
-                        data["text"],
-                        message_type="text",
-                    )
-
-                    msg_index[mid]["db_id"] = db_id
-
-                    page.update()
-
-                elif mtype == "attachment":
-                    kind = data.get("kind", "file")
-                    name = data.get("name", "file")
-
-                    path = save_incoming_media(
-                        name,
-                        data.get("data", "")
-                    )
-
-                    chat_area.controls.append(
-                        make_bubble(
-                            mid,
-                            None,
-                            False,
-                            media_kind=kind,
-                            media_path=path,
-                            media_name=name,
-                        )
-                    )
-
-                    db_id = db_save(
-                        mid,
-                        contact_id,
-                        my_id,
-                        f"[media]{path}|{name}|{kind}",
-                        message_type=kind,
-                    )
-
-                    msg_index[mid]["db_id"] = db_id
-
-                    page.update()
-
-                else:
-                    continue
-
+                ]
+                page.update()
+    
+                print("Registering phone:", my_phone)
+    
                 await ws.send(
                     json.dumps({
-                        "type": "ack",
-                        "to": sender,
-                        "mid": mid
+                        "type": "register",
+                        "phone": my_phone
                     })
                 )
-
+    
+                print("Phone registered:", my_phone)
+    
+                async for raw in ws:
+                    print("Received:", raw)
+    
+                    data = json.loads(raw)
+                    mtype = data.get("type")
+                    sender = data.get("from")
+    
+                    if mtype == "ack":
+                        item = msg_index.get(data.get("mid"))
+                        if item:
+                            item["tick"].value = "✓✓"
+                            page.update()
+                        continue
+    
+                    if mtype == "delete":
+                        remove_bubble(data.get("mid"))
+                        continue
+    
+                    if sender != str(contact_phone):
+                        continue
+    
+                    mid = data.get("mid") or str(uuid.uuid4())
+    
+                    if mtype == "message":
+                        row_control = make_bubble(
+                            mid,
+                            data["text"],
+                            False
+                        )
+    
+                        chat_area.controls.append(row_control)
+    
+                        db_id = db_save(
+                            mid,
+                            contact_id,
+                            my_id,
+                            data["text"],
+                            message_type="text",
+                        )
+    
+                        msg_index[mid]["db_id"] = db_id
+    
+                        page.update()
+    
+                    elif mtype == "attachment":
+                        kind = data.get("kind", "file")
+                        name = data.get("name", "file")
+    
+                        path = save_incoming_media(
+                            name,
+                            data.get("data", "")
+                        )
+    
+                        chat_area.controls.append(
+                            make_bubble(
+                                mid,
+                                None,
+                                False,
+                                media_kind=kind,
+                                media_path=path,
+                                media_name=name,
+                            )
+                        )
+    
+                        db_id = db_save(
+                            mid,
+                            contact_id,
+                            my_id,
+                            f"[media]{path}|{name}|{kind}",
+                            message_type=kind,
+                        )
+    
+                        msg_index[mid]["db_id"] = db_id
+    
+                        page.update()
+    
+                    else:
+                        continue
+    
+                    await ws.send(
+                        json.dumps({
+                            "type": "ack",
+                            "to": sender,
+                            "mid": mid
+                        })
+                    )
+    
         except Exception as ex:
             print("====================================")
             print("WebSocket connect FAILED")
@@ -1013,18 +1014,18 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
             print("ERROR TYPE:", type(ex).__name__)
             print("ERROR:", repr(ex))
             print("====================================")
-
+    
             ws_state["connection"] = None
-
+    
             status_text.spans = [
-            ft.TextSpan(
-                "offline",
-                style=ft.TextStyle(color="grey")
-              )
+                ft.TextSpan(
+                    "offline",
+                    style=ft.TextStyle(color="grey")
+                )
             ]
-
+    
             page.update()
-
+    
     old_task = getattr(page, "_ws_task", None)
     if old_task and not old_task.done():
         old_task.cancel()
