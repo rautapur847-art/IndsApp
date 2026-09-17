@@ -1,0 +1,16 @@
+# ---- Core app ----
+flet
+flet-desktop          # native window ke liye (agar sirf 'flet' se hi window na khule)
+websockets             # chat.py aur ws_server.py dono ke liye
+mysql-connector-python # database/db.py
+python-dotenv          # .env file (.env se MYSQL_*, GEMINI_API_KEY waghera padhne ke liye)
+
+# ---- Camera screen (camera.py -- flet_camera based) ----
+flet-camera
+
+# ---- Mic screen (mic.py -- record + speech-to-text) ----
+flet-audio-recorder
+SpeechRecognition
+
+# ---- Gallery / image resize (photo.py) ----
+Pillow
