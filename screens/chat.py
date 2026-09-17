@@ -17,7 +17,7 @@ from screens.mic_screen import MicScreen
 from screens.file_screen import FileScreen
 from screens.gallery_screen import GalleryScreen
 
-WS_SERVER_URL = "https://indsapp-websocket.onrender.com"  # abhi live server -- asli server deploy hone pe "wss://tumhara-domain.com" daalna
+WS_SERVER_URL = "wss://indsapp-websocket.onrender.com"  # abhi live server -- asli server deploy hone pe "wss://tumhara-domain.com" daalna
 
 MEDIA_DIR = "assets"
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
