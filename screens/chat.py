@@ -886,76 +886,143 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
     # ---- WebSocket se connect karo aur live messages sunte raho ----
     async def connect_and_listen():
         try:
-            async with websockets.connect(WS_SERVER_URL, max_size=None) as ws:
-                ws_state["connection"] = ws
-                status_text.spans = [ft.TextSpan("online", style=ft.TextStyle(color="green"))]
-                page.update()
+            print("Connecting to WebSocket:", WS_SERVER_URL)
 
-                await ws.send(json.dumps({"type": "register", "phone": my_phone}))
+            async with websockets.connect(
+            WS_SERVER_URL,
+            max_size=None,
+            open_timeout=30,
+            ping_interval=20,
+            ping_timeout=20,
+            ) as ws:
 
-                async for raw in ws:
-                    data = json.loads(raw)
-                    mtype = data.get("type")
-                    sender = data.get("from")
+            print("WebSocket CONNECTED")
 
-                    # ---- delivery tick update ----
-                    if mtype == "ack":
-                        item = msg_index.get(data.get("mid"))
-                        if item:
-                            item["tick"].value = "✓✓"
-                            page.update()
-                        continue
+            ws_state["connection"] = ws
 
-                    # ---- delete for everyone ----
-                    if mtype == "delete":
-                        remove_bubble(data.get("mid"))
-                        continue
+            status_text.spans = [
+                ft.TextSpan(
+                    "online",
+                    style=ft.TextStyle(color="green")
+                )
+            ]
+            page.update()
 
-                    if sender != str(contact_phone):
-                        continue
+            print("Registering phone:", my_phone)
 
-                    mid = data.get("mid") or str(uuid.uuid4())
+            await ws.send(
+                json.dumps({
+                    "type": "register",
+                    "phone": my_phone
+                })
+            )
 
-                    if mtype == "message":
-                        row_control = make_bubble(mid, data["text"], False)
-                        chat_area.controls.append( row_control)
-                        db_id = db_save(
-                            mid, contact_id, my_id, data["text"],
-                            message_type="text",
-                        )
-                        msg_index[mid]["db_id"] = db_id
+            print("Phone registered:", my_phone)
+
+            async for raw in ws:
+                print("Received:", raw)
+
+                data = json.loads(raw)
+                mtype = data.get("type")
+                sender = data.get("from")
+
+                if mtype == "ack":
+                    item = msg_index.get(data.get("mid"))
+                    if item:
+                        item["tick"].value = "✓✓"
                         page.update()
-                                 
-                    elif mtype == "attachment":
-                        kind = data.get("kind", "file")
-                        name = data.get("name", "file")
-                        path = save_incoming_media(name, data.get("data", ""))
+                    continue
 
-                        chat_area.controls.append(
-                            make_bubble(
-                                mid, None, False,
-                                media_kind=kind,
-                                media_path=path,
-                                media_name=name,
-                            )
-                        )
-                        db_id = db_save(
-                            mid, contact_id, my_id,
-                            f"[media]{path}|{name}|{kind}",
-                            message_type=kind,
-                        )
-                        msg_index[mid]["db_id"] = db_id
-                        page.update()
-                                 
-                    else:
-                        continue
+                if mtype == "delete":
+                    remove_bubble(data.get("mid"))
+                    continue
 
-                    # ---- ack wapas bhejo ----
-                    await ws.send(json.dumps({"type": "ack", "to": sender, "mid": mid}))
+                if sender != str(contact_phone):
+                    continue
+
+                mid = data.get("mid") or str(uuid.uuid4())
+
+                if mtype == "message":
+                    row_control = make_bubble(
+                        mid,
+                        data["text"],
+                        False
+                    )
+
+                    chat_area.controls.append(row_control)
+
+                    db_id = db_save(
+                        mid,
+                        contact_id,
+                        my_id,
+                        data["text"],
+                        message_type="text",
+                    )
+
+                    msg_index[mid]["db_id"] = db_id
+
+                    page.update()
+
+                elif mtype == "attachment":
+                    kind = data.get("kind", "file")
+                    name = data.get("name", "file")
+
+                    path = save_incoming_media(
+                        name,
+                        data.get("data", "")
+                    )
+
+                    chat_area.controls.append(
+                        make_bubble(
+                            mid,
+                            None,
+                            False,
+                            media_kind=kind,
+                            media_path=path,
+                            media_name=name,
+                        )
+                    )
+
+                    db_id = db_save(
+                        mid,
+                        contact_id,
+                        my_id,
+                        f"[media]{path}|{name}|{kind}",
+                        message_type=kind,
+                    )
+
+                    msg_index[mid]["db_id"] = db_id
+
+                    page.update()
+
+                else:
+                    continue
+
+                await ws.send(
+                    json.dumps({
+                        "type": "ack",
+                        "to": sender,
+                        "mid": mid
+                    })
+                )
 
         except Exception as ex:
-            print("WebSocket connect failed:", repr(ex))
-            status_text.spans = [ft.TextSpan("offline", style=ft.TextStyle(color="grey"))]
+            print("====================================")
+            print("WebSocket connect FAILED")
+            print("URL:", WS_SERVER_URL)
+            print("ERROR TYPE:", type(ex).__name__)
+            print("ERROR:", repr(ex))
+            print("====================================")
+
+            ws_state["connection"] = None
+
+            status_text.spans = [
+            ft.TextSpan(
+                "offline",
+                style=ft.TextStyle(color="grey")
+              )
+            ]
+
             page.update()
 
     old_task = getattr(page, "_ws_task", None)
