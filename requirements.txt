@@ -1,5 +1,5 @@
 # ---- Core app ----
-flet
+flet==0.86.5
 flet-desktop          # native window ke liye (agar sirf 'flet' se hi window na khule)
 websockets             # chat.py aur ws_server.py dono ke liye
 mysql-connector-python # database/db.py
