@@ -4,10 +4,12 @@ import flet as ft
 import asyncio
 import json
 import base64
+import io
 import mimetypes
 import os
 import uuid
 import websockets
+from PIL import Image
 from database.db import Database
 from screens.home import Home
 from datetime import timedelta
@@ -21,6 +23,28 @@ WS_SERVER_URL = "wss://indsapp-websocket.onrender.com"  # abhi live server -- as
 
 MEDIA_DIR = "assets"
 IMAGE_EXT = (".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp")
+
+# Render/Cloudflare ka WebSocket proxy bade messages pe connection reset
+# kar deta hai (ConnectionClosedError) -- isse bachne ke liye images
+# compress karte hain aur bahut badi files ko bhejne se pehle hi rok dete hain.
+MAX_SEND_BYTES = 900 * 1024  # ~900 KB
+
+
+def compress_image_b64(b64_data, max_dimension=1280, quality=75):
+    """Bada image chhota karke wapas base64 deta hai, taaki WebSocket
+    proxy ke message-size limit se connection na tute. Camera se aayi
+    full-resolution photo aksar isi wajah se fail hoti hai."""
+    try:
+        raw = base64.b64decode(b64_data)
+        img = Image.open(io.BytesIO(raw))
+        img = img.convert("RGB")
+        img.thumbnail((max_dimension, max_dimension))
+        buf = io.BytesIO()
+        img.save(buf, "JPEG", quality=quality, optimize=True)
+        return base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as ex:
+        print("Image compression failed:", repr(ex), flush=True)
+        return b64_data  # fallback: jo mila wahi bhej do
 
 # InteractiveViewer har Flet version me nahi hota -- agar available hai to
 # pinch/scroll se zoom milega, warna bina crash kiye plain image dikhegi.
@@ -721,6 +745,11 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
         render_attachment_bar()
 
     def show_attachment(kind, path, name, b64_data):
+        # Image/camera ko yahin chhota kar do -- camera ki full-resolution
+        # photo aksar 3-8 MB ki hoti hai, jo WebSocket proxy tod deta hai
+        if kind in ("image", "camera") and b64_data:
+            b64_data = compress_image_b64(b64_data)
+
         # naya attachment list me JUD jaata hai -- purana nahi hatta,
         # isliye camera + image + file sab ek saath rakh sakte ho
         pending_attachments.append({
@@ -808,6 +837,11 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
             path = item["path"]
             name = item["name"] or "file"
             b64_data = item["b64"]
+
+            if b64_data and len(b64_data) > MAX_SEND_BYTES:
+                toast(f"{name} bahut badi hai, chhoti file/image bhejo", "red")
+                remove_attachment(item["id"])
+                continue
 
             page.run_task(
                 ws_state["connection"].send,
