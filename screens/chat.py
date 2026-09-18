@@ -9,7 +9,11 @@ import mimetypes
 import os
 import uuid
 import websockets
-from PIL import Image
+try:
+    from PIL import Image
+    HAS_PIL = True
+except Exception:
+    HAS_PIL = False
 from database.db import Database
 from screens.home import Home
 from datetime import timedelta
@@ -34,6 +38,8 @@ def compress_image_b64(b64_data, max_dimension=1280, quality=75):
     """Bada image chhota karke wapas base64 deta hai, taaki WebSocket
     proxy ke message-size limit se connection na tute. Camera se aayi
     full-resolution photo aksar isi wajah se fail hoti hai."""
+    if not HAS_PIL:
+        return b64_data  # Pillow install nahi hai -- bina compress kiye original bhejo
     try:
         raw = base64.b64decode(b64_data)
         img = Image.open(io.BytesIO(raw))
@@ -745,20 +751,36 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
         render_attachment_bar()
 
     def show_attachment(kind, path, name, b64_data):
-        # Image/camera ko yahin chhota kar do -- camera ki full-resolution
-        # photo aksar 3-8 MB ki hoti hai, jo WebSocket proxy tod deta hai
-        if kind in ("image", "camera") and b64_data:
-            b64_data = compress_image_b64(b64_data)
+        # Pehle turant dikhao (original data ke saath) -- UI kabhi bhi
+        # frozen nahi feel hona chahiye. Compression background me hoga.
+        item_id = str(uuid.uuid4())
 
-        # naya attachment list me JUD jaata hai -- purana nahi hatta,
-        # isliye camera + image + file sab ek saath rakh sakte ho
         pending_attachments.append({
-            "id": str(uuid.uuid4()),
+            "id": item_id,
             "type": kind,
             "path": path,
             "name": name,
             "b64": b64_data,
+            "compressing": kind in ("image", "camera") and bool(b64_data),
         })
+        render_attachment_bar()
+
+        # Image/camera ko background thread me chhota karo -- camera ki
+        # full-resolution photo aksar 3-8 MB ki hoti hai, jo WebSocket
+        # proxy tod deta hai. asyncio.to_thread se ye UI ko freeze nahi
+        # karega, chahe compression me 1-2 second lagein.
+        if kind in ("image", "camera") and b64_data:
+            page.run_task(_compress_attachment_bg, item_id, b64_data)
+
+    async def _compress_attachment_bg(item_id, b64_data):
+        compressed = await asyncio.to_thread(compress_image_b64, b64_data)
+
+        for item in pending_attachments:
+            if item["id"] == item_id:
+                item["b64"] = compressed
+                item["compressing"] = False
+                break
+
         render_attachment_bar()
 
     # ==================================================================
@@ -828,6 +850,10 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
 
         if ws_state["connection"] is None:
             toast("Offline hai, message nahi gaya", "red")
+            return
+
+        if any(item.get("compressing") for item in pending_attachments):
+            toast("Image taiyar ho rahi hai, 1 second ruko...", "orange")
             return
 
         # ---------- ATTACHMENTS (ek ya kayi, jitne bhi lage hon) ----------
@@ -1154,5 +1180,8 @@ def Chat(page: ft.Page, my_id: int, contact_id: int, contact_name: str, contact_
         chat_area,
         bottom_area,
     )
+
+    if not HAS_PIL:
+        toast("Pillow install nahi hai -- pip install Pillow (image compress nahi hogi)", "orange")
 
     page.update()
