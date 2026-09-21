@@ -1,0 +1,15 @@
+name: Keep IndsApp WebSocket server awake
+
+on:
+  schedule:
+    # Har 10 minute me chalega (GitHub Actions cron thoda delay kar sakta
+    # hai, isliye exact 10 min guarantee nahi, lekin ~10-15 min me chalega)
+    - cron: "*/10 * * * *"
+  workflow_dispatch:  # manual "Run workflow" button ke liye bhi
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping health-check endpoint
+        run: curl -sf https://indsapp-websocket.onrender.com/healthz
