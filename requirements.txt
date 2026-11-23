@@ -1,6 +1,6 @@
 # ---- Core app ----
 flet==0.86.5
-flet-web==0.86.5
+#flet-web==0.86.5
 fastapi<0.100
 flet-desktop          # native window ke liye (agar sirf 'flet' se hi window na khule)
 websockets>=12.0             # chat.py aur ws_server.py dono ke liye
