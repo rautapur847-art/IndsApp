@@ -12,4 +12,11 @@ def main(page:ft.Page):
     page.vertical_alignment = ft.MainAxisAlignment.CENTER
     LoginScreen(page)
    
-ft.run(main, view=ft.AppView.WEB_BROWSER,assets_dir="assets")
+ft.run(
+    main,
+    view=ft.AppView.WEB_BROWSER,
+    assets_dir="assets",
+    host="0.0.0.0",
+    port=int(os.environ.get("PORT", 8550)),
+)
+#ft.run(main, view=ft.AppView.WEB_BROWSER,assets_dir="assets")
